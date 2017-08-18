@@ -1,0 +1,117 @@
+#!/bin/bash
+#
+#qubilities:qulistot
+#Copyright (C) 2017  saces@c-base.org
+#
+#This program is free software: you can redistribute it and/or modify
+#it under the terms of the GNU General Public License as published by
+#the Free Software Foundation, either version 3 of the License, or
+#(at your option) any later version.
+#
+#This program is distributed in the hope that it will be useful,
+#but WITHOUT ANY WARRANTY; without even the implied warranty of
+#MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#GNU General Public License for more details.
+#
+#You should have received a copy of the GNU General Public License
+#along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+
+function drucke_verwendung() {
+cat << EOF
+Usage: ${0##*/} --help | --version
+
+List all orphan templates
+
+  --help            Display this text and exit.
+  --version         Display version number and exit.
+EOF
+}
+
+function drucke_version() {
+  echo "${0##*/} version 0.0.1"
+}
+
+function fehlerfall() {
+  echo "Error: ${1}"
+  drucke_verwendung
+  exit 1
+}
+
+function loesche_orphan() {
+  vmlist=$(qvm-ls --raw-list)
+  while read item; do
+    vmname="${item%-vm.directory}"
+    if ! echo "${vmlist}" | grep -x ${vmname} > /dev/null; then
+      echo "delete ~/.local/share/desktop-directories/${vmname}-vm.directory"
+      rm ~/.local/share/desktop-directories/${vmname}-vm.directory
+    fi
+  done < <(ls  ~/.local/share/desktop-directories)
+
+  while read item; do
+
+    while read line; do
+      key="${line%=*}"
+      vmname="${line#*=}"
+      if [ "${key}" = "X-Qubes-VmName" ]; then
+        if ! echo "${vmlist}" | grep -x ${vmname} > /dev/null; then
+          echo "delete ~/.local/share/applications/${item}"
+          rm ~/.local/share/applications/${item}
+        fi
+      fi
+    done < <(cat ~/.local/share/applications/${item})
+
+  done < <(ls  ~/.local/share/applications)
+}
+
+function list_orphan() {
+  echo "Currently unused templates:"
+  while read line;
+  do
+    case ${line} in
+      "n/a" | "None")
+        ;;
+      *)
+        TPL_LIST="${TPL_LIST}"$'\n'"${line}"
+        ;;
+    esac
+  done < <(qvm-ls --raw-data template)
+
+  while read line;
+  do
+    name=${line%%|*}
+    if [ "${line#*|}" = "Tpl" ]; then
+      if ! echo "${TPL_LIST}" | grep -x ${name} > /dev/null; then
+        echo "${name}"
+      fi
+    fi
+  done < <(qvm-ls --raw-data name-raw type)
+}
+
+function pruefe_argument() {
+  case ${1} in
+    --help)
+      drucke_verwendung
+      exit 0
+      ;;
+    --version)
+      drucke_version
+      exit 0
+      ;;
+    *)
+      fehlerfall "Illegal argument. Nice try, dude."
+      ;;
+  esac
+}
+
+case ${#} in
+  0) list_orphan
+     ;;
+  1) pruefe_argument ${1}
+     ;;
+  *) fehlerfall "Too many arguments"
+     ;;
+esac
+
+echo "Thanks for using ${0##*/}."
+exit 0

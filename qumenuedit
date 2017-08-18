@@ -1,0 +1,119 @@
+#!/bin/bash
+#
+#qubilities:qumenuedit
+#Copyright (C) 2017  saces@c-base.org
+#
+#This program is free software: you can redistribute it and/or modify
+#it under the terms of the GNU General Public License as published by
+#the Free Software Foundation, either version 3 of the License, or
+#(at your option) any later version.
+#
+#This program is distributed in the hope that it will be useful,
+#but WITHOUT ANY WARRANTY; without even the implied warranty of
+#MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#GNU General Public License for more details.
+#
+#You should have received a copy of the GNU General Public License
+#along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+function drucke_verwendung() {
+cat << EOF
+Usage: ${0##*/} --help | --version | [vmname]
+
+Edits the aplication menu for a vm. If no vmname is given,
+a nicely menu let you choose one.
+
+  --help     Display this text and exit.
+  --version  Display version number and exit.
+EOF
+}
+
+function drucke_version() {
+  echo "${0##*/} version 0.0.1"
+}
+
+function fehlerfall() {
+  echo "Error: ${1}"
+  drucke_verwendung
+  exit 1
+}
+
+function mach_wirklich() {
+  #exec qubes-vm-settings ${1} applications
+  qubes-vm-settings ${1} applications
+}
+
+function pruefe_vmname() {
+  if qvm-ls --raw-list | grep -x ${1} > /dev/null; then
+    mach_wirklich ${1}
+  else
+    fehlerfall "Unknown vmname '${1}'. Try again, dude."
+  fi
+}
+
+function frage_nach_vm() {
+  while read line;
+  do
+    name=${line%%|*}
+    case ${line#*|} in
+      "Admin")
+        # ignore dom0
+        ;;
+      "")
+        # Appvm
+        APP_VMS="${APP_VMS} ${name}"
+        ;;
+      "Net"|"Proxy")
+        # Sys vm
+        SYS_VMS="${SYS_VMS} ${name}"
+        ;;
+      "Tpl")
+        # Template
+        TPL_VMS="${TPL_VMS} ${name}"
+        ;;
+      *)
+        echo "blub: ${line#*|}"
+        ;;
+    esac
+  done < <(qvm-ls --raw-data name-raw type)
+
+  APP_VMS=$(echo ${APP_VMS} | tr " " "\n" | sort)
+  TPL_VMS=$(echo ${TPL_VMS} | tr " " "\n" | sort)
+  SYS_VMS=$(echo ${SYS_VMS} | tr " " "\n" | sort)
+
+  select vmname in ${APP_VMS} ${TPL_VMS} ${SYS_VMS}; do
+    if [ -n "${vmname}" ] ; then
+      mach_wirklich ${vmname}
+      break
+    else
+      echo "Wuht?? Try again."
+    fi
+  done
+}
+
+function pruefe_argument() {
+  case ${1} in
+    --help)    drucke_verwendung
+               exit 0
+               ;;
+    --version) drucke_version
+               exit 0
+               ;;
+    dom0)      fehlerfall "Illegal vmname 'dom0'. Nice try, dude."
+               ;;
+    *)         pruefe_vmname ${1}
+               ;;
+  esac
+}
+
+case ${#} in
+  0) frage_nach_vm
+     ;;
+  1) pruefe_argument ${1}
+     ;;
+  *) fehlerfall "Too many arguments"
+     ;;
+esac
+
+echo "Thanks for using ${0##*/}."
+exit 0
